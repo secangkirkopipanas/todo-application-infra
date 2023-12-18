@@ -1,0 +1,73 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: todo-dotnet-event-listener
+spec:
+  namespaceSelector: {}
+  resources:
+    kubernetesResource:
+      replicas: 1
+  serviceAccountName: pipeline
+  triggers:
+  - bindings:
+    - ref: github-push
+    interceptors:
+    - params:
+      - name: secretRef
+        value:
+          secretName: github-credentials
+          secretKey: webhook-secret
+      ref:
+        name: github
+    - params:
+      - name: filter
+        value: (header.match('X-GitHub-Event', 'push') && !body.ref.startsWith('refs/tags'))
+      - name: overlays
+        value:
+        - expression: body.ref.split('/')[2]
+          key: ref
+      ref:
+        name: cel
+    name: todo-dotnet-build-and-push
+    template:
+      ref: todo-dotnet-build-and-push-template
+  - bindings:
+    - ref: github-push
+    interceptors:
+    - params:
+      - name: secretRef
+        value:
+          secretName: github-credentials
+          secretKey: webhook-secret
+      ref:
+        name: github
+    - params:
+      - name: filter
+        value: (header.match('X-GitHub-Event', 'push') && body.ref.startsWith('refs/tags'))
+      - name: overlays
+        value:
+        - expression: body.ref.split('/')[2]
+          key: ref
+      ref:
+        name: cel
+    name: todo-dotnet-promote-to-sit
+    template:
+      ref: todo-dotnet-promote-to-sit-template
+  - bindings:
+    - ref: github-release
+    interceptors:
+    - params:
+      - name: secretRef
+        value:
+          secretName: github-credentials
+          secretKey: webhook-secret
+      ref:
+        name: github
+    - params:
+      - name: filter
+        value: (header.match('X-GitHub-Event', 'release') && body.action == 'published')
+      ref:
+        name: cel
+    name: todo-dotnet-promote-to-prod
+    template:
+      ref: todo-dotnet-promote-to-prod-template

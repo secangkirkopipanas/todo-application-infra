@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-java-app
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: todo-java-app
+          image: >-
+            quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-java:9f24bd4c89
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+            requests:
+              cpu: 200m
+              memory: 1024Mi

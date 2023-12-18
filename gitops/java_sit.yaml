@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: todo-java-sit-applicationset
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: sit
+        url: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: '{{cluster}}-todo-java'
+    spec:
+      destination:
+        name: ''
+        namespace: todo-sit
+        server: '{{url}}'
+      source:
+        path: deploy/app-java/overlays/sit
+        repoURL: https://github.com/sgnus-infra/todo-application-infra
+        targetRevision: HEAD
+      sources: []
+      project: default
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: false
+        syncOptions:
+          - CreateNamespace=true

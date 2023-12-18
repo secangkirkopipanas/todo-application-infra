@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pipeline-java
+spec:
+  destination:
+    name: ''
+    namespace: todo-dev
+    server: https://kubernetes.default.svc
+  source:
+    path: pipeline/java
+    repoURL: https://github.com/sgnus-infra/todo-application-infra
+    targetRevision: HEAD
+  sources: []
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,85 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: push-manifest
+spec:
+  params:
+    - default: >-
+        https://dev-user:openshift@gitea.apps.cluster-5khxf.5khxf.sandbox2563.opentlc.com/dev-user/securing-software-supply-chain.git
+      name: gitRepositoryUrl
+      type: string
+    - default: main
+      name: gitRepositoryRevision
+      type: string
+    - default: ''
+      name: pushToRevision
+      type: string
+      description: |
+        When set to `""``, skip push to Git repository.
+    - default: 'false'
+      description: |
+        When set to `"true"`, skip verifying the TLS certs of the Central
+        endpoint.  Defaults to `"false"`.
+      name: insecure-skip-tls-verify
+      type: string
+  workspaces:
+    - name: infra-repo
+  steps:
+  - image: 'quay.io/rh_rh/pipeline-utils:latest'
+    name: update-manifest
+    env:
+        - name: GITHUB_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: github-credentials
+              key: "email"
+        - name: GITHUB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: github-credentials
+              key: "username"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-credentials
+              key: "token"
+    script: |
+      #!/usr/bin/env bash
+      set +x
+
+      export $(cat image.env | xargs)
+
+      printf -- "------------------\n"
+      printf    " Push Manifest    \n"
+      printf -- "------------------\n\n"
+
+      if [ ${#TAG_NAME} -gt 30 ]; then
+        TAG_NAME="${TAG_NAME:0:10}"
+      fi
+      echo "Image name: $IMAGE_NAME:$TAG_NAME"
+
+      printf -- "-> Configuring environment... "
+      git config --global user.email "$GITHUB_EMAIL"
+      git config --global user.name "$GITHUB_USERNAME"
+      git config --global credential.helper store
+      printf "Done!\n"
+
+      cd $(pwd)/infra
+
+      if [ -n "$(git status --porcelain)" ]; then
+        printf -- "-> Pushing manifest to Git repo... "
+        if [ ! -z "$(params.pushToRevision)" ]; then
+          rm -fR input output
+          git add *
+          git commit --quiet -m "[PIPELINE] Updated manifest with image name '$IMAGE_NAME:$TAG_NAME'"
+          git push --quiet -f --set-upstream origin $(params.pushToRevision)
+          printf "Done!\n\n"
+        else
+          printf "Skipped!\n\n"
+        fi
+      else
+        printf -- "-> No changes in the local infra repo!\n\n"
+      fi
+
+      rm -fR $(workspaces.infra-repo.path)/*
+    workingDir: $(workspaces.infra-repo.path)

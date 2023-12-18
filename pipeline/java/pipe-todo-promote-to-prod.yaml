@@ -1,0 +1,94 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: todo-java-promote-to-prod
+spec:
+  params:
+    - name: SOURCE_CODE_GIT_REPO
+      type: string
+      default: "https://github.com/sgnus-infra/todo-application.git"
+      description: "Git repository of source code"
+    - name: TAG_NAME
+      type: string
+      description: "The promoted tag name"
+    - name: INFRA_GIT_REPO
+      type: string
+      default: "https://github.com/sgnus-infra/todo-application-infra.git"
+      description: "Git repository of infra code repo"
+    - name: INFRA_GIT_REF
+      type: string
+      default: main
+      description: "Git ref of infra code repo"
+    - name: IMAGE
+      type: string
+      default: quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-java
+      description: "Image name for application"
+  workspaces:
+    - name: shared-workspace
+      description: | 
+        This workspace contains source code, so they can be read by the next task.
+    - name: infra-repo
+      description: | 
+        This workspace contains all infra manifests.
+  tasks:
+    - name: update-manifest
+      taskRef:
+        name: update-manifest
+      params:
+        - name: insecure-skip-tls-verify
+          value: "true"
+        - name: gitRepositoryUrl
+          value: $(params.INFRA_GIT_REPO)
+        - name: gitRepositoryRevision
+          value: $(params.INFRA_GIT_REF)
+        - name: pushToRevision
+          value: ""
+        - name: manifestFile
+          value: deploy/app-java/overlays/prod/dep-todo.yaml
+        - name: image
+          value: $(params.IMAGE)
+        - name: imageTagName
+          value: "$(params.TAG_NAME)"
+      workspaces:
+        - name: infra-repo
+          workspace: infra-repo
+    - name: acs-deployment-check
+      taskRef:
+        name: acs-deployment-check
+      runAfter:
+        - update-manifest
+      params:
+        - name: rox_api_token
+          value: stackrox
+        - name: rox_central_endpoint
+          value: stackrox
+        - name: insecure-skip-tls-verify
+          value: "true"
+        - name: gitRepositoryUrl
+          value: $(params.INFRA_GIT_REPO)
+        - name: gitRepositoryRevision
+          value: $(params.INFRA_GIT_REF)``
+        - name: skipPull
+          value: "false"
+        - name: appName
+          value: app-java
+      workspaces:
+        - name: source
+          workspace: infra-repo
+    - name: push-manifest
+      taskRef:
+        name: push-manifest
+      runAfter:
+        - acs-deployment-check
+      params:
+        - name: insecure-skip-tls-verify
+          value: "true"
+        - name: gitRepositoryUrl
+          value: $(params.INFRA_GIT_REPO)
+        - name: gitRepositoryRevision
+          value: $(params.INFRA_GIT_REF)
+        - name: pushToRevision
+          value: $(params.INFRA_GIT_REF)
+      workspaces:
+        - name: infra-repo
+          workspace: infra-repo

@@ -1,0 +1,55 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: todo-java-build-and-push-template
+spec:
+  params:
+  - description: the specific commit SHA.
+    name: git-revision
+  - description: The commit message
+    name: git-commit-message
+  - description: The  name of the git repo
+    name: git-repo-name
+  - description: The git repository URL.
+    name: git-repo-url
+  - description: The git ref.
+    name: git-ref
+  - description: The repository name for this PullRequest.
+    name: pusher-name
+  - description: The content type of the webhook.
+    name: content-type
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: todo-java-build-and-push-
+    spec:
+      pipelineRef:
+        name: todo-java-build-and-push
+      params:
+        - name: SOURCE_CODE_GIT_REPO
+          value: "$(tt.params.git-repo-url)"
+        - name: SOURCE_CODE_GIT_REF
+          value: "$(tt.params.git-ref)"
+        - name: INFRA_GIT_REPO
+          value: "https://github.com/sgnus-infra/todo-application-infra.git"
+        - name: INFRA_GIT_REF
+          value: main
+        - name: GIT_COMMIT_ID
+          value: "$(tt.params.git-revision)"
+      workspaces:
+        - name: shared-workspace
+          persistentVolumeClaim:
+            claimName: todo-java-workspace
+        - name: maven-local-repo
+          persistentVolumeClaim:
+            claimName: maven-local-repo
+        - name: infra-repo
+          persistentVolumeClaim:
+            claimName: todo-java-infra-workspace
+        - name: dockerconfig
+          secret:
+            secretName: image-registry-secret
+        - name: github-basic-auth
+          secret:
+            secretName: github-basic-auth-secret

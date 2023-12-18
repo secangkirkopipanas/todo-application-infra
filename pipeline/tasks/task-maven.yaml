@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: maven
+spec:
+  params:
+  - name: OPENJDK_IMAGE
+    description: Container image of OpenJDK for the build
+    default: "registry.access.redhat.com/ubi9/openjdk-17:1.16"
+  - name: GOALS
+    description: Maven goals for the build
+    default: "clean package"
+  - name: SKIP_TESTS
+    description: Skip unit test during build
+    default: "true"
+  - name: MAVEN_OPTS
+    description: Maven options for the build
+    default: "-Xms4G -Xmx4G"
+  workspaces:
+  - name: source
+  - name: maven-local-repo
+  steps:
+  - name: build-maven
+    image: $(params.OPENJDK_IMAGE)
+    script: |
+      #!/usr/bin/env bash
+      set +x
+      
+      printf -- "-------------------------------------------------\n"
+      printf    " Performing application build with Maven wrapper \n"
+      printf -- "-------------------------------------------------\n\n"
+
+      MAVEN_LOCAL_REPO="$(workspaces.maven-local-repo.path)/.m2"
+      printf -- "-> Initialise Maven local repository ($MAVEN_LOCAL_REPO)... "
+      mkdir -p $MAVEN_LOCAL_REPO
+      printf "Done!\n\n"
+
+      cd $(workspaces.source.path)
+      MAVEN_OPTS="$(params.MAVEN_OPTS)" ./mvnw -B -Dhttps.protocols=TLSv1.2 -Djava.awt.headless=true -DskipTests=$(params.SKIP_TESTS) $(params.GOALS) -Dmaven.repo.local=$MAVEN_LOCAL_REPO
+      
+    workingDir: $(workspaces.source.path)
+    env:
+    - name: HOME
+      value: /workspace

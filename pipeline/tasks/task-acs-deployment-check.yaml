@@ -1,0 +1,178 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: acs-deployment-check
+spec:
+  description: >-
+    Policy check a deployment with StackRox/RHACS This tasks allows you to check
+    a deployment against build-time policies and apply enforcement to fail
+    builds. It's a companion to the stackrox-image-scan task, which returns full
+    vulnerability scan results for an image.
+  params:
+    - description: |
+        Secret containing the address:port tuple for StackRox Central)
+        (example - rox.stackrox.io:443)
+      name: rox_central_endpoint
+      type: string
+    - description: Secret containing the StackRox API token with CI permissions
+      name: rox_api_token
+      type: string
+    - default: >-
+        https://dev-user:openshift@gitea.apps.cluster-5khxf.5khxf.sandbox2563.opentlc.com/dev-user/securing-software-supply-chain.git
+      name: gitRepositoryUrl
+      type: string
+    - default: main
+      name: gitRepositoryRevision
+      type: string
+    - default: "false"
+      name: skipPull
+      type: string
+    - name: appGitRef
+      type: string
+      default: ''
+    - default: 'false'
+      description: |
+        When set to `"true"`, skip verifying the TLS certs of the Central
+        endpoint.  Defaults to `"false"`.
+      name: insecure-skip-tls-verify
+      type: string
+    - name: appName
+      type: string
+  workspaces:
+    - name: source
+  results:
+    - description: Output of `roxctl deployment check`
+      name: check_output
+  steps:
+    - image: 'quay.io/rh_rh/pipeline-utils:latest'
+      name: git-checkout
+      env:
+        - name: GITHUB_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: github-credentials
+              key: "email"
+        - name: GITHUB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: github-credentials
+              key: "username"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-credentials
+              key: "token"
+      script: |
+        #!/usr/bin/env bash
+        set +x
+
+        printf -- "-----------------------------------\n"
+        printf    " Clone Infra Configuration         \n"
+        printf -- "-----------------------------------\n\n"
+
+        set -eu -o pipefail
+
+        
+        if [ "$(params.skipPull)" == "false" ]; then
+          printf -- "-> Configuring environment... "
+          git config --global user.email "$GITHUB_EMAIL"
+          git config --global user.name "$GITHUB_USERNAME"
+          printf "Done!\n"
+
+          printf -- "-> Fetching manifest from Git repo '$(params.gitRepositoryUrl)'... "
+          if [ -d $(pwd)/infra ]; then
+            rm -fR $(pwd)/infra
+          fi
+          NEW_GIT_URL="$(params.gitRepositoryUrl)"
+          NEW_GIT_URL=$(echo "${NEW_GIT_URL/https:\/\//https:\/\/$GITHUB_USERNAME:$GITHUB_TOKEN@}")
+          git clone --quiet "$NEW_GIT_URL" $(pwd)/infra
+          git config --global credential.helper store
+          cd $(pwd)/infra
+          git checkout --quiet "$(params.gitRepositoryRevision)"
+          printf "Done!\n"
+        fi
+      workingDir: $(workspaces.source.path)
+    - image: quay.io/wpernath/kustomize-ubi
+      name: kustomize-build
+      script: |
+        #!/usr/bin/env sh
+        set +x
+
+        printf -- "--------------------------------------------\n"
+        printf    " Build Deployment File with Kustomize       \n"
+        printf -- "--------------------------------------------\n\n"
+
+        set -eu -o pipefail
+
+        if [[ "$(params.appGitRef)" =~ "refs/heads/.*" ]]; then
+          ENV=dev
+        elif [[ "$(params.appGitRef)" =~ ^refs/tags/.* ]]; then
+          ENV=sit
+        else
+          ENV=prod
+        fi
+
+        ls -al $(workspaces.source.path)/infra/
+
+        cd $(workspaces.source.path)/infra/deploy/$(params.appName)/overlays/$ENV
+
+        mkdir -p $(workspaces.source.path)/infra/input
+        mkdir -p $(workspaces.source.path)/infra/output
+
+        kustomize build . --output $(workspaces.source.path)/infra/input/all.yaml
+      workingDir: $(workspaces.source.path)
+    - image: looztra/kubesplit
+      name: kustomize-split
+      script: >
+        #!/usr/bin/env sh
+
+        printf -- "--------------------------------------------\n"
+        printf    " Split Deployment File with Kustomize       \n"
+        printf -- "--------------------------------------------\n\n"
+
+        set -eu -o pipefail
+
+        kubesplit -i $(workspaces.source.path)/infra/input/all.yaml -o $(workspaces.source.path)/infra/output
+      workingDir: $(workspaces.source.path)
+    - env:
+        - name: ROX_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: rox_api_token
+              name: $(params.rox_api_token)
+        - name: ROX_CENTRAL_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              key: rox_central_endpoint
+              name: $(params.rox_central_endpoint)
+      image: 'quay.io/rh_rh/pipeline-utils:latest'
+      name: rox-deploy-scan
+      script: |
+        #!/usr/bin/env sh
+
+        printf -- "--------------------------------------\n"
+        printf    " Deployment Check with Stackrox       \n"
+        printf -- "--------------------------------------\n\n"
+        
+        cd $(workspaces.source.path)/infra/output
+
+        echo "StackRox Central URL: $ROX_CENTRAL_ENDPOINT"
+        echo "StackRox API Token: $ROX_API_TOKEN"
+
+        curl -s -k -L -H "Authorization: Bearer $ROX_API_TOKEN" \
+          "https://$ROX_CENTRAL_ENDPOINT/api/cli/download/roxctl-linux" \
+          --output ./roxctl  \
+          > /dev/null
+
+        ls -R
+
+        chmod +x ./roxctl > /dev/null
+        DEPLOYMENT_FILE=$(ls -1a -- **/*deployment--*-app*)
+        echo "DEPLOYMENT_FILE: $DEPLOYMENT_FILE"
+
+        echo "Checking deployment file with 'roxctl' command..."
+        ./roxctl deployment check \
+          $( [ "$(params.insecure-skip-tls-verify)" = "true" ] && \
+          echo -n "--insecure-skip-tls-verify") \
+          -e "$ROX_CENTRAL_ENDPOINT" --file "$DEPLOYMENT_FILE"
+      workingDir: $(workspaces.source.path)/infra

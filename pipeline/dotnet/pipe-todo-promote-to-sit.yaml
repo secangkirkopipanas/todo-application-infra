@@ -1,0 +1,129 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: todo-dotnet-promote-to-sit
+spec:
+  params:
+    - default: 'https://github.com/sgnus-infra/todo-dotnet-application.git'
+      description: Git repository of source code
+      name: SOURCE_CODE_GIT_REPO
+      type: string
+    - default: main
+      description: Git ref of source code repo
+      name: SOURCE_CODE_GIT_REF
+      type: string
+    - default: 'https://github.com/sgnus-infra/todo-application-infra.git'
+      description: Git repository of infra code repo
+      name: INFRA_GIT_REPO
+      type: string
+    - default: main
+      description: Git ref of infra code repo
+      name: INFRA_GIT_REF
+      type: string
+    - description: Last Git commit ID
+      name: GIT_COMMIT_ID
+      type: string
+    - default: quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-dotnet
+      description: Image
+      name: IMAGE
+      type: string
+    - default: deploy/app-dotnet/overlays/sit/dep-todo-sit.yaml
+      description: Path to deployment manifest
+      name: MANIFEST_FILE
+      type: string
+    - default: latest
+      description: Version
+      name: VERSION
+      type: string
+  tasks:
+    - name: retag-image
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE)
+        - name: GIT_COMMIT_ID
+          value: $(params.GIT_COMMIT_ID)
+        - name: TLSVERIFY
+          value: 'false'
+        - name: GIT_REF
+          value: $(params.SOURCE_CODE_GIT_REF)
+      taskRef:
+        name: s2i-retag
+      workspaces:
+        - name: infra-repo
+          workspace: infra-repo
+        - name: dockerconfig
+          workspace: dockerconfig
+    - name: update-manifest
+      params:
+        - name: insecure-skip-tls-verify
+          value: 'true'
+        - name: gitRepositoryUrl
+          value: $(params.INFRA_GIT_REPO)
+        - name: gitRepositoryRevision
+          value: $(params.INFRA_GIT_REF)
+        - name: pushToRevision
+          value: ''
+        - name: manifestFile
+          value: $(params.MANIFEST_FILE)
+        - name: image
+          value: $(params.IMAGE)
+        - name: imageTagName
+          value: $(params.VERSION)
+      runAfter:
+        - retag-image
+      taskRef:
+        name: update-manifest
+      workspaces:
+        - name: infra-repo
+          workspace: infra-repo
+    - name: acs-deployment-check
+      params:
+        - name: rox_api_token
+          value: stackrox
+        - name: rox_central_endpoint
+          value: stackrox
+        - name: insecure-skip-tls-verify
+          value: 'true'
+        - name: gitRepositoryUrl
+          value: $(params.INFRA_GIT_REPO)
+        - name: gitRepositoryRevision
+          value: $(params.INFRA_GIT_REF)``
+        - name: skipPull
+          value: 'false'
+        - name: appGitRef
+          value: $(params.SOURCE_CODE_GIT_REF)
+        - name: appName
+          value: app-dotnet
+      runAfter:
+        - update-manifest
+      taskRef:
+        name: acs-deployment-check
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+    - name: push-manifest
+      params:
+        - name: insecure-skip-tls-verify
+          value: "true"
+        - name: gitRepositoryUrl
+          value: $(params.INFRA_GIT_REPO)
+        - name: gitRepositoryRevision
+          value: $(params.INFRA_GIT_REF)
+        - name: pushToRevision
+          value: $(params.INFRA_GIT_REF)
+      runAfter:
+        - acs-deployment-check
+      taskRef:
+        name: push-manifest
+      workspaces:
+        - name: infra-repo
+          workspace: infra-repo
+  workspaces:
+    - description: >
+        This workspace contains source code, so they can be read by the next
+        task.
+      name: shared-workspace
+    - name: dockerconfig
+    - name: infra-repo
+      description: | 
+        This workspace contains all infra manifests.

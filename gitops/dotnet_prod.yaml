@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: todo-dotnet-prod-applicationset
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: prod
+        url: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: '{{cluster}}-todo-dotnet'
+    spec:
+      destination:
+        name: ''
+        namespace: todo-prod
+        server: '{{url}}'
+      source:
+        path: deploy/app-dotnet/overlays/prod
+        repoURL: https://github.com/sgnus-infra/todo-application-infra
+        targetRevision: HEAD
+      sources: []
+      project: default
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: false
+        syncOptions:
+          - CreateNamespace=true

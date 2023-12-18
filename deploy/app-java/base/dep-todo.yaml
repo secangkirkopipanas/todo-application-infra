@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: todo-java-app
+    app.kubernetes.io/name: todo-java-app
+    app.openshift.io/runtime: spring
+  name: todo-java-app
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: todo-java-app
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: todo-java-app
+        app.kubernetes.io/part-of: todo-java-app
+    spec:
+      imagePullSecrets:
+        - name: devops-baby-pull-secret
+      containers:
+        - env:
+            - name: TZ
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: timezone
+            - name: JAVA_OPTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: java_options
+            - name: SPRING_ACTIVE_PROFILES
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: spring_active_profiles
+            - name: H2_CONSOLE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: h2_console_enabled
+            - name: DATASOURCE_DRIVER_CLASSNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: datasource_driver_classname
+            - name: DATASOURCE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: datasource_url
+            - name: JPA_DIALECT
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-java-configmap
+                  key: jpa_dialect
+            - name: DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: database-user
+                  name: todo-java-db-secret
+            - name: DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: database-password
+                  name: todo-java-db-secret
+          image: quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-java:tag_name
+          imagePullPolicy: IfNotPresent
+          name: todo-java-app
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2048Mi
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /management/info
+              port: 8080
+              scheme: HTTP
+          readinessProbe:
+            failureThreshold: 5
+            successThreshold: 1
+            httpGet:
+              path: /management/info
+              port: 8080
+              scheme: HTTP
+          startupProbe:
+            failureThreshold: 5
+            successThreshold: 1
+            httpGet:
+              path: /management/info
+              port: 8080
+              scheme: HTTP
+          securityContext:
+            runAsNonRoot: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30

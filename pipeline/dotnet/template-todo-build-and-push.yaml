@@ -1,0 +1,56 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: todo-dotnet-build-and-push-template
+spec:
+  params:
+  - description: the specific commit SHA.
+    name: git-revision
+  - description: The commit message
+    name: git-commit-message
+  - description: The  name of the git repo
+    name: git-repo-name
+  - description: The git repository URL.
+    name: git-repo-url
+  - description: The git ref.
+    name: git-ref
+  - description: The repository name for this PullRequest.
+    name: pusher-name
+  - description: The content type of the webhook.
+    name: content-type
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: todo-dotnet-build-and-push-
+    spec:
+      pipelineRef:
+        name: todo-dotnet-build-and-push
+      params:
+        - name: GIT_REPO
+          value: "$(tt.params.git-repo-url)"
+        - name: GIT_REVISION
+          value: "$(tt.params.git-ref)"
+        - name: INFRA_GIT_REPO
+          value: "https://github.com/sgnus-infra/todo-application-infra.git"
+        - name: INFRA_GIT_REF
+          value: main
+        - name: GIT_COMMIT_ID
+          value: "$(tt.params.git-revision)"
+        - name: IMAGE_NAME
+          value: quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-dotnet
+        - name: MANIFEST_FILE
+          value: deploy/app-dotnet/overlays/dev/dep-todo-dev.yaml
+      workspaces:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: todo-dotnet-workspace
+        - name: dockerconfig
+          secret:
+            secretName: image-registry-secret
+        - name: infra-repo
+          persistentVolumeClaim:
+            claimName: todo-dotnet-infra-workspace
+        - name: github-basic-auth
+          secret:
+            secretName: github-basic-auth

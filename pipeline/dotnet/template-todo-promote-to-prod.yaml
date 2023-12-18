@@ -1,0 +1,50 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: todo-dotnet-promote-to-prod-template
+spec:
+  params:
+  - description: the specific commit SHA.
+    name: git-revision
+  - description: The commit message
+    name: git-commit-message
+  - description: The  name of the git repo
+    name: git-repo-name
+  - description: The git repository URL.
+    name: git-repo-url
+  - description: The git tag name.
+    name: git-tag-name
+  - description: The repository name for this PullRequest.
+    name: pusher-name
+  - description: The content type of the webhook.
+    name: content-type
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: todo-dotnet-promote-to-prod-
+    spec:
+      pipelineRef:
+        name: todo-dotnet-promote-to-prod
+      params:
+        - name: SOURCE_CODE_GIT_REPO
+          value: "$(tt.params.git-repo-url)"
+        - name: TAG_NAME
+          value: "$(tt.params.git-tag-name)"
+        - name: INFRA_GIT_REPO
+          value: "https://github.com/sgnus-infra/todo-application-infra.git"
+        - name: INFRA_GIT_REF
+          value: main
+        - name: IMAGE
+          value: quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-dotnet
+        - name: MANIFEST_FILE
+          value: deploy/app-dotnet/overlays/prod/dep-todo-prod.yaml
+        - name: VERSION
+          value: latest
+      workspaces:
+        - name: shared-workspace
+          persistentVolumeClaim:
+            claimName: todo-dotnet-workspace
+        - name: infra-repo
+          persistentVolumeClaim:
+            claimName: todo-dotnet-infra-workspace

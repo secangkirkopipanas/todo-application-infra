@@ -1,0 +1,12 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: todo-dotnet-github-webhook-route
+spec:
+  to:
+    kind: Service
+    name: el-todo-dotnet-event-listener
+    weight: 100
+  port:
+    targetPort: http-listener
+  wildcardPolicy: None

@@ -1,0 +1,8 @@
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: todo-app
+secrets:
+  - name: todo-java-db-secret
+imagePullSecrets:
+  - name: devops-baby-pull-secret
