@@ -9,7 +9,7 @@ spec:
     server: https://kubernetes.default.svc
   source:
     path: pipeline/tasks
-    repoURL: https://github.com/sgnus-infra/todo-application-infra
+    repoURL: https://github.com/secangkirkopipanas/todo-application-infra.git
     targetRevision: HEAD
   sources: []
   project: default
