@@ -6,7 +6,7 @@ spec:
   params:
     - name: SOURCE_CODE_GIT_REPO
       type: string
-      default: "https://github.com/sgnus-infra/todo-application.git"
+      default: "https://github.com/secangkirkopipanas/todo-application.git"
       description: "Git repository of source code"
     - name: SOURCE_CODE_GIT_REF
       type: string
@@ -14,7 +14,7 @@ spec:
       description: "Git ref of source code repo"
     - name: INFRA_GIT_REPO
       type: string
-      default: "https://github.com/sgnus-infra/todo-application-infra.git"
+      default: "https://github.com/secangkirkopipanas/todo-application-infra.git"
       description: "Git repository of infra code"
     - name: INFRA_GIT_REF
       type: string
