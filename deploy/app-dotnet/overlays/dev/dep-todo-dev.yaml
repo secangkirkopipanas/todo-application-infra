@@ -9,4 +9,4 @@ spec:
       containers:
         - name: todo-dotnet-app
           image: >-
-            quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-dotnet:168ed8039a
+            quay.io/rh_rh/todo-dotnet:168ed8039a
