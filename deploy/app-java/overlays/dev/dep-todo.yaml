@@ -9,4 +9,4 @@ spec:
       containers:
         - name: todo-java-app
           image: >-
-            quay-registry-quay-quay-enterprise.apps.dev.ocp.nus.edu.sg/devops/todo-java:10ea2e2
+            quay.io/rh_rh/todo-java:10ea2e2
