@@ -65,7 +65,7 @@ spec:
         - fetch-source
       params:
         - name: OPENJDK_IMAGE
-          value: registry.access.redhat.com/ubi9/openjdk-17:1.16
+          value: registry.access.redhat.com/ubi9/openjdk-17:1.17-1
         - name: GOALS
           value: "clean package checkstyle:check"
         - name: SKIP_TESTS
